@@ -182,13 +182,10 @@ func (m *Manager) StartWorkspace(ctx context.Context, req *api.StartWorkspaceReq
 	}
 	span.LogKV("event", "pod created")
 
-	// only regular workspaces get a service, the others are fine with just pod
+	// all workspaces get a service (now)
 	okResponse := &api.StartWorkspaceResponse{Url: startContext.WorkspaceURL}
-	if req.Type != api.WorkspaceType_REGULAR {
-		return okResponse, nil
-	}
 
-	// mandatory Theia service
+	// mandatory IDE service
 	servicePrefix := getServicePrefix(req)
 	theiaServiceName := getTheiaServiceName(servicePrefix)
 	theiaServiceLabels := make(map[string]string, len(startContext.Labels)+1)
