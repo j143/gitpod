@@ -1,0 +1,30 @@
+{
+    "status": {
+        "id": "8e0bbcdf-a926-4670-8c40-b718f035b2ae",
+        "metadata": {
+            "owner": "d98c5b92-2066-4fce-bea6-1e08b58642ab",
+            "meta_id": "green-wombat-62dzneud",
+            "started_at": {
+                "seconds": 1622206099
+            }
+        },
+        "spec": {
+            "workspace_image": "eu.gcr.io/gitpod-core-dev/registry/workspace-images:81c4fb602a540d261f210cfc8ba0435b63b24238c1762ec029d8edaec816afb6",
+            "ide_image": "eu.gcr.io/gitpod-core-dev/build/ide/code:gpl-headless-log-wsman.17",
+            "headless": true,
+            "url": "https://green-wombat-62dzneud.ws-dev.gpl-headless-log-wsman.staging.gitpod-dev.com",
+            "type": 1
+        },
+        "phase": 1,
+        "conditions": {
+            "deployed": 1
+        },
+        "message": "pod is pending",
+        "runtime": {
+            "pod_name": "prebuild-8e0bbcdf-a926-4670-8c40-b718f035b2ae"
+        },
+        "auth": {
+            "owner_token": "FZ2k9zbSCo9e85Y21yh.SHLJbya7pW2Y"
+        }
+    }
+}

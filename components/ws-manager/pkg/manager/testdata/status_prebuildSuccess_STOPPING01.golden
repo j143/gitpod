@@ -76,7 +76,7 @@
             ],
             "type": 1
         },
-        "phase": 4,
+        "phase": 5,
         "conditions": {
             "service_exists": 1,
             "deployed": 1

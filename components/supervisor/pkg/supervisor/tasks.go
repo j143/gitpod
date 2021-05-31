@@ -205,7 +205,7 @@ func (tm *tasksManager) init(ctx context.Context) {
 	}
 }
 
-func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup) {
+func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup, successChan chan bool) {
 	defer wg.Done()
 	defer log.Debug("tasksManager shutdown")
 
@@ -275,6 +275,7 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup) {
 	for _, task := range tm.tasks {
 		select {
 		case <-ctx.Done():
+			successChan <- false
 			return
 		case taskSuccess := <-task.successChan:
 			if !taskSuccess {
@@ -286,6 +287,7 @@ func (tm *tasksManager) Run(ctx context.Context, wg *sync.WaitGroup) {
 	if tm.config.isHeadless() {
 		tm.reporter.done(success)
 	}
+	successChan <- success
 }
 
 func (tm *tasksManager) getCommand(task *task) string {

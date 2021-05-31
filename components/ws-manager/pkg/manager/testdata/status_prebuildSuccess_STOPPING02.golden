@@ -76,9 +76,10 @@
             ],
             "type": 1
         },
-        "phase": 4,
+        "phase": 5,
         "conditions": {
             "service_exists": 1,
+            "snapshot": "workspaces/green-wombat-62dzneud/snapshot-1622206186881521445.tar@gitpod-user-d98c5b92-2066-4fce-bea6-1e08b58642ab",
             "deployed": 1
         },
         "runtime": {

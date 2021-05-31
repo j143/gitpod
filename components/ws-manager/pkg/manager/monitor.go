@@ -74,8 +74,6 @@ type Monitor struct {
 	finalizerMap     map[string]context.CancelFunc
 	finalizerMapLock sync.Mutex
 
-	headlessListener *HeadlessListener
-
 	OnError func(error)
 }
 
@@ -88,23 +86,15 @@ func (m *Manager) CreateMonitor() (*Monitor, error) {
 
 	log.WithField("interval", monitorInterval).Info("starting workspace monitor")
 	res := Monitor{
-		manager:          m,
-		ticker:           time.NewTicker(monitorInterval),
-		probeMap:         make(map[string]context.CancelFunc),
-		initializerMap:   make(map[string]struct{}),
-		finalizerMap:     make(map[string]context.CancelFunc),
-		headlessListener: NewHeadlessListener(m.RawClient, m.Config.Namespace),
+		manager:        m,
+		ticker:         time.NewTicker(monitorInterval),
+		probeMap:       make(map[string]context.CancelFunc),
+		initializerMap: make(map[string]struct{}),
+		finalizerMap:   make(map[string]context.CancelFunc),
 
 		OnError: func(err error) {
 			log.WithError(err).Error("workspace monitor error")
 		},
-	}
-	res.headlessListener.OnHeadlessLog = res.handleHeadlessLog
-	res.headlessListener.OnHeadlessDone = func(pod *corev1.Pod, failed bool) {
-		err := res.actOnHeadlessDone(pod, failed)
-		if err != nil {
-			log.WithFields(wsk8s.GetOWIFromObject(&pod.ObjectMeta)).WithError(err).Error("cannot handle headless workspace event")
-		}
 	}
 	res.eventpool = workpool.NewEventWorkerPool(res.handleEvent)
 
@@ -238,14 +228,21 @@ func (m *Monitor) actOnPodEvent(ctx context.Context, status *api.WorkspaceStatus
 		return fmt.Errorf("cannot act on pod %s: has no %s annotation", pod.Name, workspaceIDAnnotation)
 	}
 
-	if status.Phase == api.WorkspacePhase_STOPPING || status.Phase == api.WorkspacePhase_STOPPED {
+	isCompletedHeadlessThatIsNotBeingDeletedYet := func(wso *workspaceObjects) bool {
+		return isCompletedHeadless(wso) && !isPodBeingDeleted(wso.Pod)
+	}
+	if status.Phase == api.WorkspacePhase_STOPPED ||
+		(status.Phase == api.WorkspacePhase_STOPPING && !isCompletedHeadlessThatIsNotBeingDeletedYet(wso)) {
 		// With regards to workspace failure, we don't do anything if the workspace is already stopping/stopped
 		// only if the workspace is in any other state do we care
+		//
+		// Headless workspaces are an exception here, because they are stopped from within, and failed headless
+		// workspaces need the case below to get their "completed" Pod deleted
 		//
 		// Beware: do not else-if this condition with the other phases as we don't want the stop
 		//         login in any other phase, too.
 	} else if status.Conditions.Failed != "" || status.Conditions.Timeout != "" {
-		// the workspace has failed to run/start - shut it down
+		// the workspace has failed to run/start (or is a failed headless workspace) - shut it down
 		// we should mark the workspace as failedBeforeStopping - this way the failure status will persist
 		// while we stop the workspace
 		_, hasFailureAnnotation := pod.Annotations[workspaceFailedBeforeStoppingAnnotation]
@@ -289,10 +286,6 @@ func (m *Monitor) actOnPodEvent(ctx context.Context, status *api.WorkspaceStatus
 	}
 
 	if status.Phase == api.WorkspacePhase_INITIALIZING {
-		if wso.IsWorkspaceHeadless() {
-			return
-		}
-
 		// workspace is initializing (i.e. running but without the ready annotation yet). Start probing and depending on
 		// the result add the appropriate annotation or stop the workspace. waitForWorkspaceReady takes care that it does not
 		// run for the same workspace multiple times.
@@ -315,15 +308,6 @@ func (m *Monitor) actOnPodEvent(ctx context.Context, status *api.WorkspaceStatus
 		err = m.manager.modifyFinalizer(ctx, workspaceID, gitpodFinalizerName, true)
 		if err != nil {
 			return xerrors.Errorf("cannot add gitpod finalizer: %w", err)
-		}
-
-		if tpe, _ := wso.WorkspaceType(); wso.IsWorkspaceHeadless() && tpe != api.WorkspaceType_GHOST {
-			// this is a headless workspace, which means that instead of probing for it becoming available, we'll listen to its log
-			// output, parse it and forward it. Listen() is idempotent.
-			err := m.headlessListener.Listen(context.Background(), pod)
-			if err != nil {
-				return xerrors.Errorf("cannot establish listener: %w", err)
-			}
 		}
 
 		// once a regular workspace is up and running, we'll remove the traceID information so that the parent span
@@ -363,101 +347,6 @@ func (m *Monitor) actOnPodEvent(ctx context.Context, status *api.WorkspaceStatus
 	}
 
 	return nil
-}
-
-// actOnHeadlessDone performs actions when a headless workspace finishes.
-func (m *Monitor) actOnHeadlessDone(pod *corev1.Pod, failed bool) (err error) {
-	wso := workspaceObjects{Pod: pod}
-
-	// This timeout is really a catch-all safety net in case any of the ws-daemon interaction
-	// goes out of hand. Really it should never play a role.
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
-	defer cancel()
-
-	span := m.traceWorkspace("actOnHeadlessDone", &wso)
-	ctx = opentracing.ContextWithSpan(ctx, span)
-	defer tracing.FinishSpan(span, &err)
-	log := log.WithFields(wsk8s.GetOWIFromObject(&pod.ObjectMeta))
-
-	id, ok := pod.Annotations[workspaceIDAnnotation]
-	if !ok {
-		return xerrors.Errorf("cannot get %s annotation from %s", workspaceIDAnnotation, pod.Name)
-	}
-
-	// Headless workspaces need to maintain their "failure state" so that we can provide feedback to users down the road.
-	// That means that the moment anything goes wrong with headless workspaces we need to fail the workspace to issue a status update.
-	handleFailure := func(msg string) error {
-		// marking the workspace as tasked failed will cause the workspace to fail as a whole which in turn will make the monitor actually stop it
-		err := m.manager.markWorkspace(context.Background(), id, addMark(workspaceExplicitFailAnnotation, msg))
-		if err == nil || isKubernetesObjNotFoundError(err) {
-			// workspace is gone - we're good
-			return nil
-		}
-
-		// log error and try to stop the workspace
-		log.WithError(err).Warn("cannot mark headless workspace as failed - stopping myself")
-		err = m.manager.stopWorkspace(context.Background(), id, stopWorkspaceNormallyGracePeriod)
-		if err == nil || isKubernetesObjNotFoundError(err) {
-			// workspace is gone - we're good
-			return nil
-		}
-
-		// we've failed to mark the workspace or remove it - that's bad
-		log.WithError(err).Error("was unable to mark workspace as failed or stop it")
-		return err
-	}
-
-	// headless build is done - if this is a prebuild take a snapshot and tell the world
-	tpe, err := wso.WorkspaceType()
-	if err != nil {
-		// We know we're working with a headless workspace, but don't know its type. This really should never happen.
-		// For now we'll just assume this is a headless workspace. Better we create one snapshot too many that too few.
-		tracing.LogError(span, err)
-		log.WithError(err).Warn("cannot determine workspace type - assuming this is a prebuild")
-		tpe = api.WorkspaceType_PREBUILD
-	}
-	if tpe == api.WorkspaceType_PREBUILD {
-		snc, err := m.manager.connectToWorkspaceDaemon(ctx, wso)
-		if err != nil {
-			tracing.LogError(span, err)
-			return handleFailure(fmt.Sprintf("cannot take snapshot: %v", err))
-		}
-		res, err := snc.TakeSnapshot(ctx, &wsdaemon.TakeSnapshotRequest{Id: id})
-		if err != nil {
-			tracing.LogError(span, err)
-			return handleFailure(fmt.Sprintf("cannot take snapshot: %v", err))
-		}
-
-		err = m.manager.markWorkspace(context.Background(), id, addMark(workspaceSnapshotAnnotation, res.Url))
-		if err != nil {
-			tracing.LogError(span, err)
-			log.WithError(err).Warn("cannot mark headless workspace with snapshot - that's one prebuild lost")
-			return handleFailure(fmt.Sprintf("cannot remember snapshot: %v", err))
-		}
-	}
-
-	// healthy prebuilds don't fail the workspace, thus we have to stop them ourselves
-	err = m.manager.stopWorkspace(ctx, id, stopWorkspaceNormallyGracePeriod)
-	if err != nil {
-		log.WithError(err).Error("unable to stop finished headless workspace")
-	}
-
-	return nil
-}
-
-func (m *Monitor) handleHeadlessLog(pod *corev1.Pod, msg string) {
-	id, ok := pod.Annotations[workspaceIDAnnotation]
-	if !ok {
-		log.WithFields(wsk8s.GetOWIFromObject(&pod.ObjectMeta)).Errorf("cannot get %s annotation from %s", workspaceIDAnnotation, pod.Name)
-		return
-	}
-
-	evt := &api.WorkspaceLogMessage{
-		Id:       id,
-		Metadata: getWorkspaceMetadata(pod),
-		Message:  msg,
-	}
-	m.manager.OnWorkspaceLog(context.Background(), evt)
 }
 
 // doHouskeeping is called regularly by the monitor and removes timed out or dangling workspaces/services
@@ -834,15 +723,16 @@ func retryIfUnavailable(ctx context.Context, op func(ctx context.Context) error)
 	return grpc_status.Error(codes.Unavailable, "workspace content initialization is currently unavailable")
 }
 
-// finalizeWorkspaceContent talks to a ws-daemon daemon on the node of the pod and initializes the workspace content.
+// finalizeWorkspaceContent talks to a ws-daemon daemon on the node of the pod and creates a backup of the workspace content.
 func (m *Monitor) finalizeWorkspaceContent(ctx context.Context, wso *workspaceObjects) {
 	span, ctx := tracing.FromContext(ctx, "finalizeWorkspaceContent")
 	defer tracing.FinishSpan(span, nil)
+	log := log.WithFields(wso.GetOWI())
 
 	workspaceID, ok := wso.WorkspaceID()
 	if !ok {
 		tracing.LogError(span, xerrors.Errorf("cannot find %s annotation", workspaceIDAnnotation))
-		log.WithFields(wso.GetOWI()).Errorf("cannot find %s annotation", workspaceIDAnnotation)
+		log.Errorf("cannot find %s annotation", workspaceIDAnnotation)
 	}
 
 	var disposalStatus *workspaceDisposalStatus
@@ -853,13 +743,13 @@ func (m *Monitor) finalizeWorkspaceContent(ctx context.Context, wso *workspaceOb
 
 		b, err := json.Marshal(disposalStatus)
 		if err != nil {
-			log.WithError(err).WithFields(wso.GetOWI()).Error("unable to marshal disposalStatus - this will break someone's experience")
+			log.WithError(err).Error("unable to marshal disposalStatus - this will break someone's experience")
 			return
 		}
 
 		err = m.manager.markWorkspace(ctx, workspaceID, addMark(disposalStatusAnnotation, string(b)))
 		if err != nil {
-			log.WithError(err).WithFields(wso.GetOWI()).Error("was unable to update pod's disposal state - this will break someone's experience")
+			log.WithError(err).Error("was unable to update pod's disposal state - this will break someone's experience")
 		}
 	}()
 
@@ -893,6 +783,31 @@ func (m *Monitor) finalizeWorkspaceContent(ctx context.Context, wso *workspaceOb
 		ctx, cancelReq := context.WithTimeout(ctx, time.Duration(m.manager.Config.Timeouts.ContentFinalization))
 		m.finalizerMap[workspaceID] = cancelReq
 		m.finalizerMapLock.Unlock()
+
+		tpe, err := wso.WorkspaceType()
+		if err != nil {
+			tracing.LogError(span, err)
+			log.WithError(err).Warn("cannot determine workspace type - assuming this is a regular")
+			tpe = api.WorkspaceType_REGULAR
+		}
+
+		if tpe == api.WorkspaceType_PREBUILD {
+			// if this is a prebuild take a snapshot and mark the workspace
+			var res *wsdaemon.TakeSnapshotResponse
+			res, err = snc.TakeSnapshot(ctx, &wsdaemon.TakeSnapshotRequest{Id: workspaceID})
+			if err != nil {
+				tracing.LogError(span, err)
+				log.WithError(err).Warn("cannot take snapshot")
+				err = fmt.Errorf("cannot take snapshot: %v", err)
+			}
+
+			err = m.manager.markWorkspace(context.Background(), workspaceID, addMark(workspaceSnapshotAnnotation, res.Url))
+			if err != nil {
+				tracing.LogError(span, err)
+				log.WithError(err).Warn("cannot mark headless workspace with snapshot - that's one prebuild lost")
+				err = fmt.Errorf("cannot remember snapshot: %v", err)
+			}
+		}
 
 		// DiposeWorkspace will "degenerate" to a simple wait if the finalization/disposal process is already running.
 		// This is unlike the initialization process where we wait for things to finish in a later phase.

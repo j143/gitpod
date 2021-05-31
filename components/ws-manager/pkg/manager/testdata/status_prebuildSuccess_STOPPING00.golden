@@ -76,11 +76,12 @@
             ],
             "type": 1
         },
-        "phase": 4,
+        "phase": 5,
         "conditions": {
             "service_exists": 1,
             "deployed": 1
         },
+        "message": "headless workspace is stopping",
         "runtime": {
             "node_name": "gke-dev-workload-1-49d27f81-pd35",
             "pod_name": "prebuild-8e0bbcdf-a926-4670-8c40-b718f035b2ae",
