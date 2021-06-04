@@ -70,7 +70,7 @@ export class WebsocketConnectionManager<C extends GitpodClient, S extends Gitpod
             resourceGuard = new CompositeResourceAccessGuard([
                 new OwnerResourceGuard(user.id),
                 new SharedWorkspaceAccessGuard(),
-                new WorkspaceLogAccessGuard(() => gitpodServer.getLoggedInUser(), this.hostContextProvider),
+                new WorkspaceLogAccessGuard(user, this.hostContextProvider),
             ]);
         } else {
             resourceGuard = { canAccess: async () => false };

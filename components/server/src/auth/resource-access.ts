@@ -420,7 +420,7 @@ export namespace TokenResourceGuard {
 
 export class WorkspaceLogAccessGuard implements ResourceAccessGuard {
     constructor(
-        protected readonly getUser: () => Promise<User>, 
+        protected readonly user: User,
         protected readonly hostContextProvider: HostContextProvider) {}
 
     async canAccess(resource: GuardedResource, operation: ResourceAccessOp): Promise<boolean> {
@@ -439,12 +439,11 @@ export class WorkspaceLogAccessGuard implements ResourceAccessGuard {
         if (!hostContext) {
             throw new Error(`no HostContext found for hostname: ${url.hostname}`);
         }
-        
+
         const svcs = hostContext.services;
         if (!svcs) {
             throw new Error(`no services found in HostContext for hostname: ${url.hostname}`);
         }
-        const user = await this.getUser();
-        return svcs.repositoryService.canAccessHeadlessLogs(user, ws.context);
+        return svcs.repositoryService.canAccessHeadlessLogs(this.user, ws.context);
     }
 }
