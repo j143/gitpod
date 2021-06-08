@@ -302,12 +302,14 @@ func RunInitializerChild() (err error) {
 	return nil
 }
 
+var _ storage.DirectAccess = &remoteContentStorage{}
+
 type remoteContentStorage struct {
 	RemoteContent map[string]storage.DownloadInfo
 }
 
 // Init does nothing
-func (rs *remoteContentStorage) Init(ctx context.Context, owner, workspace string) error {
+func (rs *remoteContentStorage) Init(ctx context.Context, owner, workspace, instance string) error {
 	return nil
 }
 
@@ -349,6 +351,11 @@ func (rs *remoteContentStorage) Qualify(name string) string {
 
 // Upload does nothing
 func (rs *remoteContentStorage) Upload(ctx context.Context, source string, name string, opts ...storage.UploadOption) (string, string, error) {
+	return "", "", fmt.Errorf("not implemented")
+}
+
+// UploadInstance takes all files from a local location and uploads it to the remote storage
+func (rs *remoteContentStorage) UploadInstance(ctx context.Context, source string, name string, options ...storage.UploadOption) (bucket, obj string, err error) {
 	return "", "", fmt.Errorf("not implemented")
 }
 
