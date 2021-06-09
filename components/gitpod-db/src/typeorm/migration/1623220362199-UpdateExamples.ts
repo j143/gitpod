@@ -11,7 +11,6 @@ export class UpdateExamples1623220362199 implements MigrationInterface {
     public async up(queryRunner: QueryRunner): Promise<any> {
         const newEntries = [
             { url: 'https://github.com/gitpod-io/template-typescript-node', description: 'A Node.js app written in TypeScript.', priority: 99 },
-            { url: 'https://github.com/gitpod-io/template-typescript-node-expressjs', description: 'A Express.js for Node.js app written in TypeScript.', priority: 99 },
             { url: 'https://github.com/gitpod-io/template-typescript-react', description: '', priority: 99 },
 
             { url: 'https://github.com/gitpod-io/template-php-laravel', description: '', priority: 99 },
