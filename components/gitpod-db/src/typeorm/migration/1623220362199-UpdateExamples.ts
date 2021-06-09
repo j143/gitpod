@@ -10,12 +10,12 @@ export class UpdateExamples1623220362199 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<any> {
         const newEntries = [
-            { url: 'https://github.com/gitpod-io/sveltejs-template', description: 'A project template for Svelte applications', priority: 90 },
-            { url: 'https://github.com/gitpod-io/spring-petclinic', description: 'A Spring sample web application', priority: 70 },
-            { url: 'https://github.com/breatheco-de/python-flask-api-tutorial', description: 'An interactive tutorial about Python Flask', priority: 40 },
-            { url: 'https://github.com/gitpod-io/ruby-on-rails', description: 'A Rails example with PostgreSQL database', priority: 30 },
-            { url: 'https://github.com/gitpod-io/dotnetcore', description: 'A simple .NET Core application example', priority: 20 },
-            { url: 'https://github.com/symfony/demo', description: 'A Symfony demo application', priority: 10 },
+            { url: 'https://github.com/gitpod-io/example-typescript-node', description: 'A Node.js app written in TypeScript.', priority: 90 },
+            { url: 'https://github.com/gitpod-io/example-python-django', description: 'A Django app written in Python. ', priority: 70 },
+            { url: 'https://github.com/gitpod-io/example-golang-cli', description: 'A CLI starter written in Go.', priority: 40 },
+            { url: 'https://github.com/gitpod-io/example-rust-cli', description: 'A CLI starter written in Rust.', priority: 30 },
+            { url: 'https://github.com/gitpod-io/spring-petclinic', description: 'A Spring app written in Java.', priority: 20 },
+            { url: 'https://github.com/gitpod-io/sveltejs-template', description: 'A Svelte.js app writtten in JavaScript', priority: 10 },
         ]
         // delete old entries
         await queryRunner.query("DELETE FROM d_b_repository_white_list");
