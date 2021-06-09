@@ -111,3 +111,31 @@ func (cs *WorkspaceService) DeleteWorkspace(ctx context.Context, req *api.Delete
 
 	return &api.DeleteWorkspaceResponse{}, nil
 }
+
+// WorkspaceLogDownloadURL provides a URL from where the content of a workspace log stream can be downloaded from
+func (cs *WorkspaceService) WorkspaceLogDownloadURL(ctx context.Context, req *api.WorkspaceLogDownloadURLRequest) (resp *api.WorkspaceLogDownloadURLResponse, err error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "WorkspaceDownloadURL")
+	span.SetTag("user", req.OwnerId)
+	span.SetTag("workspaceId", req.WorkspaceId)
+	span.SetTag("instanceId", req.InstanceId)
+	defer tracing.FinishSpan(span, &err)
+
+	blobName := cs.s.BackupObject(req.WorkspaceId, storage.DefaultBackup)
+
+	info, err := cs.s.SignDownload(ctx, cs.s.Bucket(req.OwnerId), blobName, &storage.SignedURLOptions{})
+	if err != nil {
+		log.WithFields(log.OWI(req.OwnerId, req.WorkspaceId, "")).
+			WithField("bucket", cs.s.Bucket(req.OwnerId)).
+			WithField("blobName", blobName).
+			WithError(err).
+			Error("error getting SignDownload URL")
+		if err == storage.ErrNotFound {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, status.Error(codes.Unknown, err.Error())
+	}
+
+	return &api.WorkspaceLogDownloadURLResponse{
+		Url: info.URL,
+	}, nil
+}

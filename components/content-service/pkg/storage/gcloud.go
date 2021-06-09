@@ -294,11 +294,10 @@ func (rs *DirectGCPStorage) Qualify(name string) string {
 
 // UploadInstance takes all files from a local location and uploads it to the per-instance remote storage
 func (rs *DirectGCPStorage) UploadInstance(ctx context.Context, source string, name string, opts ...UploadOption) (bucket, object string, err error) {
-	objName, err := InstanceObjectName(rs.InstanceID, name)
-	if err != nil {
-		return "", "", err
+	if rs.InstanceID == "" {
+		return "", "", fmt.Errorf("instanceID is required to comput object name")
 	}
-	return rs.Upload(ctx, source, objName, opts...)
+	return rs.Upload(ctx, source, InstanceObjectName(rs.InstanceID, name), opts...)
 }
 
 // Upload takes all files from a local location and uploads it to the remote storage
@@ -998,4 +997,9 @@ func (p *PresignedGCPStorage) ObjectHash(ctx context.Context, bucket string, obj
 // BackupObject returns a backup's object name that a direct downloader would download
 func (p *PresignedGCPStorage) BackupObject(workspaceID string, name string) string {
 	return fmt.Sprintf("workspaces/%s", gcpWorkspaceBackupObjectName(workspaceID, name))
+}
+
+// InstanceObject returns a instance's object name that a direct downloader would download
+func (p *PresignedGCPStorage) InstanceObject(workspaceID string, instanceID string, name string) string {
+	return p.BackupObject(workspaceID, InstanceObjectName(instanceID, name))
 }

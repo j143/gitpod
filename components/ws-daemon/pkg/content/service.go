@@ -359,7 +359,6 @@ func (s *WorkspaceService) DisposeWorkspace(ctx context.Context, req *api.Dispos
 	if err != nil {
 		log.WithError(err).WithFields(sess.OWI()).Error("log backup failed")
 		// atm we do not fail the workspace here, yet, because we still might succeed with its content!
-		return nil, status.Error(codes.DataLoss, "log backup failed")
 	}
 
 	if req.Backup {

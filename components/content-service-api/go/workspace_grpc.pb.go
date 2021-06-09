@@ -24,6 +24,8 @@ const _ = grpc.SupportPackageIsVersion7
 type WorkspaceServiceClient interface {
 	// WorkspaceDownloadURL provides a URL from where the content of a workspace can be downloaded from
 	WorkspaceDownloadURL(ctx context.Context, in *WorkspaceDownloadURLRequest, opts ...grpc.CallOption) (*WorkspaceDownloadURLResponse, error)
+	// WorkspaceLogDownloadURL provides a URL from where the content of a workspace can be downloaded from
+	WorkspaceLogDownloadURL(ctx context.Context, in *WorkspaceLogDownloadURLRequest, opts ...grpc.CallOption) (*WorkspaceLogDownloadURLResponse, error)
 	// DeleteWorkspace deletes the content of a single workspace
 	DeleteWorkspace(ctx context.Context, in *DeleteWorkspaceRequest, opts ...grpc.CallOption) (*DeleteWorkspaceResponse, error)
 }
@@ -45,6 +47,15 @@ func (c *workspaceServiceClient) WorkspaceDownloadURL(ctx context.Context, in *W
 	return out, nil
 }
 
+func (c *workspaceServiceClient) WorkspaceLogDownloadURL(ctx context.Context, in *WorkspaceLogDownloadURLRequest, opts ...grpc.CallOption) (*WorkspaceLogDownloadURLResponse, error) {
+	out := new(WorkspaceLogDownloadURLResponse)
+	err := c.cc.Invoke(ctx, "/contentservice.WorkspaceService/WorkspaceLogDownloadURL", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *workspaceServiceClient) DeleteWorkspace(ctx context.Context, in *DeleteWorkspaceRequest, opts ...grpc.CallOption) (*DeleteWorkspaceResponse, error) {
 	out := new(DeleteWorkspaceResponse)
 	err := c.cc.Invoke(ctx, "/contentservice.WorkspaceService/DeleteWorkspace", in, out, opts...)
@@ -60,6 +71,8 @@ func (c *workspaceServiceClient) DeleteWorkspace(ctx context.Context, in *Delete
 type WorkspaceServiceServer interface {
 	// WorkspaceDownloadURL provides a URL from where the content of a workspace can be downloaded from
 	WorkspaceDownloadURL(context.Context, *WorkspaceDownloadURLRequest) (*WorkspaceDownloadURLResponse, error)
+	// WorkspaceLogDownloadURL provides a URL from where the content of a workspace can be downloaded from
+	WorkspaceLogDownloadURL(context.Context, *WorkspaceLogDownloadURLRequest) (*WorkspaceLogDownloadURLResponse, error)
 	// DeleteWorkspace deletes the content of a single workspace
 	DeleteWorkspace(context.Context, *DeleteWorkspaceRequest) (*DeleteWorkspaceResponse, error)
 	mustEmbedUnimplementedWorkspaceServiceServer()
@@ -71,6 +84,9 @@ type UnimplementedWorkspaceServiceServer struct {
 
 func (UnimplementedWorkspaceServiceServer) WorkspaceDownloadURL(context.Context, *WorkspaceDownloadURLRequest) (*WorkspaceDownloadURLResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WorkspaceDownloadURL not implemented")
+}
+func (UnimplementedWorkspaceServiceServer) WorkspaceLogDownloadURL(context.Context, *WorkspaceLogDownloadURLRequest) (*WorkspaceLogDownloadURLResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkspaceLogDownloadURL not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) DeleteWorkspace(context.Context, *DeleteWorkspaceRequest) (*DeleteWorkspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteWorkspace not implemented")
@@ -106,6 +122,24 @@ func _WorkspaceService_WorkspaceDownloadURL_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkspaceService_WorkspaceLogDownloadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WorkspaceLogDownloadURLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkspaceServiceServer).WorkspaceLogDownloadURL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/contentservice.WorkspaceService/WorkspaceLogDownloadURL",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkspaceServiceServer).WorkspaceLogDownloadURL(ctx, req.(*WorkspaceLogDownloadURLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _WorkspaceService_DeleteWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteWorkspaceRequest)
 	if err := dec(in); err != nil {
@@ -134,6 +168,10 @@ var WorkspaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WorkspaceDownloadURL",
 			Handler:    _WorkspaceService_WorkspaceDownloadURL_Handler,
+		},
+		{
+			MethodName: "WorkspaceLogDownloadURL",
+			Handler:    _WorkspaceService_WorkspaceLogDownloadURL_Handler,
 		},
 		{
 			MethodName: "DeleteWorkspace",

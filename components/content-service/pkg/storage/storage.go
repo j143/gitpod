@@ -79,6 +79,9 @@ type PresignedAccess interface {
 
 	// BackupObject returns a backup's object name that a direct downloader would download
 	BackupObject(workspaceID string, name string) string
+
+	// InstanceObject returns a instance's object name that a direct downloader would download
+	InstanceObject(workspaceID string, instanceID string, name string) string
 }
 
 // ObjectMeta describtes the metadata of a remote object
@@ -352,9 +355,6 @@ func blobObjectName(name string) (string, error) {
 	return fmt.Sprintf("blobs/%s", name), nil
 }
 
-func InstanceObjectName(instanceID, name string) (string, error) {
-	if instanceID == "" {
-		return "", fmt.Errorf("instanceID is required to comput object name")
-	}
-	return "instances/" + instanceID + "/" + name, nil
+func InstanceObjectName(instanceID, name string) string {
+	return fmt.Sprintf("instances/%s/%s", instanceID, name)
 }

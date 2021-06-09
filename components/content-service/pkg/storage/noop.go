@@ -115,3 +115,8 @@ func (*PresignedNoopStorage) ObjectHash(ctx context.Context, bucket string, obj 
 func (*PresignedNoopStorage) BackupObject(workspaceID string, name string) string {
 	return ""
 }
+
+// InstanceObject returns a instance's object name that a direct downloader would download
+func (*PresignedNoopStorage) InstanceObject(workspaceID string, instanceID string, name string) string {
+	return ""
+}

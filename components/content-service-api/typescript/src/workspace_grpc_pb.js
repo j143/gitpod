@@ -53,6 +53,28 @@ function deserialize_contentservice_WorkspaceDownloadURLResponse(buffer_arg) {
   return workspace_pb.WorkspaceDownloadURLResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
+function serialize_contentservice_WorkspaceLogDownloadURLRequest(arg) {
+  if (!(arg instanceof workspace_pb.WorkspaceLogDownloadURLRequest)) {
+    throw new Error('Expected argument of type contentservice.WorkspaceLogDownloadURLRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_contentservice_WorkspaceLogDownloadURLRequest(buffer_arg) {
+  return workspace_pb.WorkspaceLogDownloadURLRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_contentservice_WorkspaceLogDownloadURLResponse(arg) {
+  if (!(arg instanceof workspace_pb.WorkspaceLogDownloadURLResponse)) {
+    throw new Error('Expected argument of type contentservice.WorkspaceLogDownloadURLResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_contentservice_WorkspaceLogDownloadURLResponse(buffer_arg) {
+  return workspace_pb.WorkspaceLogDownloadURLResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
 
 var WorkspaceServiceService = exports.WorkspaceServiceService = {
   // WorkspaceDownloadURL provides a URL from where the content of a workspace can be downloaded from
@@ -66,6 +88,18 @@ workspaceDownloadURL: {
     requestDeserialize: deserialize_contentservice_WorkspaceDownloadURLRequest,
     responseSerialize: serialize_contentservice_WorkspaceDownloadURLResponse,
     responseDeserialize: deserialize_contentservice_WorkspaceDownloadURLResponse,
+  },
+  // WorkspaceLogDownloadURL provides a URL from where the content of a workspace can be downloaded from
+workspaceLogDownloadURL: {
+    path: '/contentservice.WorkspaceService/WorkspaceLogDownloadURL',
+    requestStream: false,
+    responseStream: false,
+    requestType: workspace_pb.WorkspaceLogDownloadURLRequest,
+    responseType: workspace_pb.WorkspaceLogDownloadURLResponse,
+    requestSerialize: serialize_contentservice_WorkspaceLogDownloadURLRequest,
+    requestDeserialize: deserialize_contentservice_WorkspaceLogDownloadURLRequest,
+    responseSerialize: serialize_contentservice_WorkspaceLogDownloadURLResponse,
+    responseDeserialize: deserialize_contentservice_WorkspaceLogDownloadURLResponse,
   },
   // DeleteWorkspace deletes the content of a single workspace
 deleteWorkspace: {

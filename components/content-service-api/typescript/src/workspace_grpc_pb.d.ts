@@ -16,6 +16,7 @@ import * as workspace_pb from "./workspace_pb";
 
 interface IWorkspaceServiceService extends grpc.ServiceDefinition<grpc.UntypedServiceImplementation> {
     workspaceDownloadURL: IWorkspaceServiceService_IWorkspaceDownloadURL;
+    workspaceLogDownloadURL: IWorkspaceServiceService_IWorkspaceLogDownloadURL;
     deleteWorkspace: IWorkspaceServiceService_IDeleteWorkspace;
 }
 
@@ -27,6 +28,15 @@ interface IWorkspaceServiceService_IWorkspaceDownloadURL extends grpc.MethodDefi
     requestDeserialize: grpc.deserialize<workspace_pb.WorkspaceDownloadURLRequest>;
     responseSerialize: grpc.serialize<workspace_pb.WorkspaceDownloadURLResponse>;
     responseDeserialize: grpc.deserialize<workspace_pb.WorkspaceDownloadURLResponse>;
+}
+interface IWorkspaceServiceService_IWorkspaceLogDownloadURL extends grpc.MethodDefinition<workspace_pb.WorkspaceLogDownloadURLRequest, workspace_pb.WorkspaceLogDownloadURLResponse> {
+    path: "/contentservice.WorkspaceService/WorkspaceLogDownloadURL";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<workspace_pb.WorkspaceLogDownloadURLRequest>;
+    requestDeserialize: grpc.deserialize<workspace_pb.WorkspaceLogDownloadURLRequest>;
+    responseSerialize: grpc.serialize<workspace_pb.WorkspaceLogDownloadURLResponse>;
+    responseDeserialize: grpc.deserialize<workspace_pb.WorkspaceLogDownloadURLResponse>;
 }
 interface IWorkspaceServiceService_IDeleteWorkspace extends grpc.MethodDefinition<workspace_pb.DeleteWorkspaceRequest, workspace_pb.DeleteWorkspaceResponse> {
     path: "/contentservice.WorkspaceService/DeleteWorkspace";
@@ -42,6 +52,7 @@ export const WorkspaceServiceService: IWorkspaceServiceService;
 
 export interface IWorkspaceServiceServer extends grpc.UntypedServiceImplementation {
     workspaceDownloadURL: grpc.handleUnaryCall<workspace_pb.WorkspaceDownloadURLRequest, workspace_pb.WorkspaceDownloadURLResponse>;
+    workspaceLogDownloadURL: grpc.handleUnaryCall<workspace_pb.WorkspaceLogDownloadURLRequest, workspace_pb.WorkspaceLogDownloadURLResponse>;
     deleteWorkspace: grpc.handleUnaryCall<workspace_pb.DeleteWorkspaceRequest, workspace_pb.DeleteWorkspaceResponse>;
 }
 
@@ -49,6 +60,9 @@ export interface IWorkspaceServiceClient {
     workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
     workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
     workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
     deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
     deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
     deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
@@ -59,6 +73,9 @@ export class WorkspaceServiceClient extends grpc.Client implements IWorkspaceSer
     public workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
     public workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
     public workspaceDownloadURL(request: workspace_pb.WorkspaceDownloadURLRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    public workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    public workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
+    public workspaceLogDownloadURL(request: workspace_pb.WorkspaceLogDownloadURLRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.WorkspaceLogDownloadURLResponse) => void): grpc.ClientUnaryCall;
     public deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
     public deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
     public deleteWorkspace(request: workspace_pb.DeleteWorkspaceRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: workspace_pb.DeleteWorkspaceResponse) => void): grpc.ClientUnaryCall;
