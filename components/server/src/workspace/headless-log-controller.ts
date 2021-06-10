@@ -15,6 +15,9 @@ import { WorkspaceDB } from "@gitpod/gitpod-db/lib/workspace-db";
 import { Timeout, WorkspaceLogService } from "./workspace-log-service";
 import * as opentracing from 'opentracing';
 import { asyncHandler } from "../express-util";
+import { isWithFunctionAccessGuard } from "../auth/function-access";
+import { accesHeadlessLogs } from "../auth/rate-limiter";
+import { BearerAuth } from "../auth/bearer-authenticator";
 
 
 @injectable()
@@ -23,15 +26,17 @@ export class HeadlessLogController {
     @inject(HostContextProvider) protected readonly hostContextProvider: HostContextProvider;
     @inject(TracedWorkspaceDB) protected readonly workspaceDb: DBWithTracing<WorkspaceDB>;
     @inject(WorkspaceLogService) protected readonly workspaceLogService: WorkspaceLogService;
+    @inject(BearerAuth) protected readonly auth: BearerAuth;
 
     get apiRouter(): express.Router {
         const router = express.Router();
 
+        router.use(this.auth.restHandlerOptionally);
         router.get("/:instanceId/:terminalId", asyncHandler(async (req: express.Request, res: express.Response) => {
             const span = opentracing.globalTracer().startSpan("/headless-logs/");
             const params = { instanceId: req.params.instanceId, terminalId: req.params.terminalId };
-            if (!req.isAuthenticated() || !User.is(req.user)) {
-                res.sendStatus(401);
+            if (!(isWithFunctionAccessGuard(req) && req.functionGuard?.canAccess(accesHeadlessLogs)) && !(req.isAuthenticated() && User.is(req.user))) {
+                res.sendStatus(403);
                 log.warn("unauthenticated headless log request", params);
                 return;
             }
