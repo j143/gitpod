@@ -11,11 +11,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"strconv"
 
 	"github.com/google/tcpproxy"
 	"github.com/gorilla/handlers"
 	"github.com/spf13/cobra"
+
+	"github.com/gitpod-io/gitpod/common-go/num"
 )
 
 var rewriteHostHeader bool
@@ -26,7 +27,7 @@ var portFwdCmd = &cobra.Command{
 	Long:  ``,
 	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		srcp, err := strconv.ParseInt(args[0], 10, 32)
+		srcp, err := num.ParseInt32(args[0])
 		if err != nil {
 			log.Fatalf("local-port cannot be parsed as int: %s", err)
 			os.Exit(-1)
@@ -41,7 +42,7 @@ var portFwdCmd = &cobra.Command{
 		trgp := srcp + 1
 		if len(args) > 1 {
 			var err error
-			trgp, err = strconv.ParseInt(args[1], 10, 32)
+			trgp, err = num.ParseInt32(args[1])
 			if err != nil {
 				log.Fatalf("target-port cannot be parsed as int: %s", err)
 				os.Exit(-1)
@@ -81,7 +82,7 @@ var portFwdCmd = &cobra.Command{
 	},
 }
 
-func checkPortRange(prt int64) error {
+func checkPortRange(prt int32) error {
 	if !(0 < prt && prt < 65535) {
 		return fmt.Errorf("Port is not within range: 0 < %d < 65535", prt)
 	}

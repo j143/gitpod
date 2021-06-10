@@ -22,6 +22,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/common-go/num"
 )
 
 // Controller controls a container's resource use
@@ -292,13 +293,13 @@ func (gov *Controller) controlProcessPriorities() {
 			continue
 		}
 
-		pid, err := strconv.ParseInt(line, 10, 64)
+		pid, err := num.ParseInt32(line)
 		if err != nil {
 			gov.log.WithError(err).WithField("line", line).Warn("cannot parse pid")
 			continue
 		}
 
-		proc, err := process.NewProcess(int32(pid))
+		proc, err := process.NewProcess(pid)
 		if err == process.ErrorProcessNotRunning {
 			// we're too late - the process is already gone
 			continue

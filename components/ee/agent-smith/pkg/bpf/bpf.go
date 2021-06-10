@@ -276,7 +276,7 @@ func LoadAndAttach(elfPath string) (*AgentSmithBPFProgram, error) {
 		statsdPort:                0,
 	}
 
-	if err := settingsMapObj.Update(uint32(0), &s, ebpf.UpdateAny); err != nil {
+	if err := settingsMapObj.Update(0, &s, ebpf.UpdateAny); err != nil {
 		return nil, err
 	}
 

@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	yaml "gopkg.in/yaml.v2"
 
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/gitpod-io/gitpod/gitpod-cli/pkg/gitpodlib"
 )
 
@@ -176,10 +176,10 @@ func parsePorts(input string) ([]int32, error) {
 	prts := strings.Split(input, ",")
 	rst := make([]int32, 0)
 	for _, prt := range prts {
-		if pv, err := strconv.ParseInt(strings.Trim(prt, " "), 10, 32); err != nil {
+		if pv, err := num.ParseInt32(prt); err != nil {
 			return nil, err
 		} else if 0 < pv && pv <= 65535 {
-			rst = append(rst, int32(pv))
+			rst = append(rst, pv)
 		} else {
 			return nil, fmt.Errorf("%d: port is out of range", pv)
 		}

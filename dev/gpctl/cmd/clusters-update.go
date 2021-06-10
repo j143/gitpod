@@ -8,12 +8,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/gitpod-io/gitpod/ws-manager-bridge/api"
 )
 
@@ -40,11 +40,11 @@ var clustersUpdateScoreCmd = &cobra.Command{
 		}
 		defer conn.Close()
 
-		value, err := strconv.Atoi(args[0])
+		value, err := num.ParseInt32(args[0])
 		if err != nil {
 			log.Fatal(err)
 		}
-		request := &api.UpdateRequest{Name: name, Property: &api.UpdateRequest_Score{Score: int32(value)}}
+		request := &api.UpdateRequest{Name: name, Property: &api.UpdateRequest_Score{Score: value}}
 
 		_, err = client.Update(ctx, request)
 		if err != nil && err != io.EOF {
@@ -71,11 +71,11 @@ var clustersUpdateMaxScoreCmd = &cobra.Command{
 		}
 		defer conn.Close()
 
-		value, err := strconv.Atoi(args[0])
+		value, err := num.ParseInt32(args[0])
 		if err != nil {
 			log.Fatal(err)
 		}
-		request := &api.UpdateRequest{Name: name, Property: &api.UpdateRequest_MaxScore{MaxScore: int32(value)}}
+		request := &api.UpdateRequest{Name: name, Property: &api.UpdateRequest_MaxScore{MaxScore: value}}
 
 		_, err = client.Update(ctx, request)
 		if err != nil && err != io.EOF {

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
-	"strconv"
 
+	"github.com/gitpod-io/gitpod/common-go/num"
 	gitpod "github.com/gitpod-io/gitpod/gitpod-protocol"
 )
 
@@ -186,17 +186,17 @@ func parseInstanceConfigs(ports []*gitpod.PortsItems) (portConfigs map[uint32]*g
 		}
 
 		rawPort := fmt.Sprintf("%v", config.Port)
-		Port, err := strconv.Atoi(rawPort)
+		port, err := num.ParseUint32(rawPort)
 		if err == nil {
 			if portConfigs == nil {
 				portConfigs = make(map[uint32]*gitpod.PortConfig)
 			}
-			port := uint32(Port)
+
 			_, exists := portConfigs[port]
 			if !exists {
 				portConfigs[port] = &gitpod.PortConfig{
 					OnOpen:     config.OnOpen,
-					Port:       float64(Port),
+					Port:       float64(port),
 					Visibility: config.Visibility,
 				}
 			}
@@ -206,18 +206,18 @@ func parseInstanceConfigs(ports []*gitpod.PortsItems) (portConfigs map[uint32]*g
 		if len(matches) != 3 {
 			continue
 		}
-		start, err := strconv.Atoi(matches[1])
+		start, err := num.ParseUint32(matches[1])
 		if err != nil {
 			continue
 		}
-		end, err := strconv.Atoi(matches[2])
+		end, err := num.ParseUint32(matches[2])
 		if err != nil || start >= end {
 			continue
 		}
 		rangeConfigs = append(rangeConfigs, &RangeConfig{
 			PortsItems: config,
-			Start:      uint32(start),
-			End:        uint32(end),
+			Start:      start,
+			End:        end,
 		})
 	}
 	return portConfigs, rangeConfigs

@@ -13,11 +13,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/google/uuid"
 	"golang.org/x/xerrors"
 	"google.golang.org/grpc"
@@ -548,11 +548,11 @@ OuterLoop:
 			if v.Name == "DB_PASSWORD" {
 				password = v.Value
 			} else if v.Name == "DB_PORT" {
-				pPort, err := strconv.Atoi(v.Value)
+				pPort, err := num.ParseInt32(v.Value)
 				if err != nil {
 					return nil, fmt.Errorf("error parsing DB_PORT '%s' on pod %s!", v.Value, pod.Name)
 				}
-				port = int32(pPort)
+				port = pPort
 			} else if v.Name == "DB_HOST" {
 				host = v.Value
 			}

@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
 
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/gitpod-io/gitpod/ws-manager/api"
 )
 
@@ -57,12 +57,12 @@ func WorkspaceAuthHandler(domain string, info WorkspaceInfoProvider) mux.Middlew
 				// to the same access policies as the workspace itself is.
 				var isPublic bool
 
-				prt, err := strconv.Atoi(port)
+				prt, err := num.ParseUint32(port)
 				if err != nil {
 					log.WithField("port", port).WithError(err).Error("cannot convert port to int")
 				} else {
 					for _, p := range ws.Ports {
-						if int(p.Port) == prt {
+						if p.Port == prt {
 							isPublic = p.Visibility == api.PortVisibility_PORT_VISIBILITY_PUBLIC
 							break
 						}

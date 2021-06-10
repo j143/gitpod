@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/gitpod-io/gitpod/supervisor/api"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/sync/errgroup"
@@ -176,9 +177,9 @@ func availablePort() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	port, err := strconv.Atoi(parsed)
+	port, err := num.ParseUint32(parsed)
 	if err != nil {
 		return 0, err
 	}
-	return uint32(port), nil
+	return port, nil
 }

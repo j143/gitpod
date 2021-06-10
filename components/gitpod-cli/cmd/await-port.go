@@ -9,10 +9,11 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/gitpod-io/gitpod/common-go/num"
 )
 
 var awaitPortCmd = &cobra.Command{
@@ -20,7 +21,7 @@ var awaitPortCmd = &cobra.Command{
 	Short: "Waits for a process to listen on a port",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		port, err := strconv.ParseInt(args[0], 10, 32)
+		port, err := num.ParseInt32(args[0])
 		if err != nil {
 			log.Fatalf("port cannot be parsed as int: %s", err)
 		}

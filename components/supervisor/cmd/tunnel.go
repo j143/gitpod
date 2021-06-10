@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gitpod-io/gitpod/common-go/log"
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/gitpod-io/gitpod/supervisor/api"
 	"github.com/spf13/cobra"
 )
@@ -19,14 +20,14 @@ var tunnelCmd = &cobra.Command{
 	Short: "opens a new tunnel",
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
-		localPort, err := strconv.Atoi(args[0])
+		localPort, err := num.ParseInt32(args[0])
 		if err != nil {
 			log.WithError(err).Fatal("invalid local port")
 			return
 		}
 		targetPort := localPort
 		if len(args) > 1 {
-			targetPort, err = strconv.Atoi(args[1])
+			targetPort, err = num.ParseInt32(args[1])
 			if err != nil {
 				log.WithError(err).Fatal("invalid target port")
 			}
@@ -56,7 +57,7 @@ var closeTunnelCmd = &cobra.Command{
 	Short: "close the tunnel",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		localPort, err := strconv.Atoi(args[0])
+		localPort, err := num.ParseUint32(args[0])
 		if err != nil {
 			log.WithError(err).Fatal("invalid local port")
 			return
@@ -67,7 +68,7 @@ var closeTunnelCmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		_, err = client.CloseTunnel(ctx, &api.CloseTunnelRequest{
-			Port: uint32(localPort),
+			Port: localPort,
 		})
 		if err != nil {
 			log.WithError(err).Fatal("cannot close the tunnel")

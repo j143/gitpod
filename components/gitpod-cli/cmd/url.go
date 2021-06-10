@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"strconv"
 	"strings"
 
+	"github.com/gitpod-io/gitpod/common-go/num"
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +30,7 @@ will print the URL of a service/server exposed on port 8080.`,
 			return
 		}
 
-		port, err := strconv.Atoi(args[0])
+		port, err := num.ParseInt32(args[0])
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "port \"%s\" is not a valid number\n", args[0])
 			return
@@ -40,7 +40,7 @@ will print the URL of a service/server exposed on port 8080.`,
 			return
 		}
 
-		fmt.Println(GetWorkspaceURL(port))
+		fmt.Println(GetWorkspaceURL(int(port)))
 	},
 }
 
