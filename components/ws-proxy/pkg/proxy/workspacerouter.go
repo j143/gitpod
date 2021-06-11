@@ -5,6 +5,7 @@
 package proxy
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -38,7 +39,7 @@ const (
 type WorkspaceRouter func(r *mux.Router, wsInfoProvider WorkspaceInfoProvider) (ideRouter *mux.Router, portRouter *mux.Router, blobserveRouter *mux.Router)
 
 // HostBasedRouter is a WorkspaceRouter that routes simply based on the "Host" header
-func HostBasedRouter(header, wsHostSuffix string) WorkspaceRouter {
+func HostBasedRouter(header, wsHostSuffix string, wsHostName string) WorkspaceRouter {
 	return func(r *mux.Router, wsInfoProvider WorkspaceInfoProvider) (*mux.Router, *mux.Router, *mux.Router) {
 		var (
 			getHostHeader = func(req *http.Request) string {
@@ -51,7 +52,14 @@ func HostBasedRouter(header, wsHostSuffix string) WorkspaceRouter {
 			}
 			blobserveRouter = r.MatcherFunc(matchBlobserveHostHeader(wsHostSuffix, getHostHeader)).Subrouter()
 			portRouter      = r.MatcherFunc(matchWorkspacePortHostHeader(wsHostSuffix, getHostHeader)).Subrouter()
-			ideRouter       = r.MatcherFunc(matchWorkspaceHostHeader(wsHostSuffix, getHostHeader)).Subrouter()
+
+			// Allow to match all cluster prefixes (ws-eu01, ws-eu01, ws-us01, ...)
+			// independent of the prefix of the cluster this component is
+			// deployed to. If the URL has an older WS cluster prefix that does
+			// not exist anymore, the workspaceMustExistHandler function in
+			// routes.go redirects to /start/.
+			allClusterWsHostSuffixRegex = fmt.Sprintf(`(.ws[a-zA-Z0-9-]*)?.%s`, wsHostName)
+			ideRouter                   = r.MatcherFunc(matchWorkspaceHostHeader(allClusterWsHostSuffixRegex, getHostHeader)).Subrouter()
 		)
 
 		r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
