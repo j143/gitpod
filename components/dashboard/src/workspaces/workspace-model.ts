@@ -13,6 +13,7 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
     protected currentlyFetching = new Set<string>();
     protected disposables = new DisposableCollection();
     protected internalLimit = 50;
+    protected dbFetchLimit = 50;
 
     get limit(): number {
         return this.internalLimit;
@@ -20,7 +21,12 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
 
     set limit(limit: number) {
         this.internalLimit = limit;
-        this.internalRefetch();
+        if (this.dbFetchLimit < this.internalLimit) {
+            this.dbFetchLimit = this.internalLimit;
+            this.internalRefetch()
+        } else {
+            this.notifyWorkpaces();
+        }
     }
 
     constructor(protected setWorkspaces: (ws: WorkspaceInfo[]) => void) {
@@ -31,7 +37,7 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
         this.disposables.dispose();
         this.disposables = new DisposableCollection();
         getGitpodService().server.getWorkspaces({
-            limit: this.internalLimit
+            limit: this.dbFetchLimit
         }).then( infos => {
             this.updateMap(infos);
             this.notifyWorkpaces();
@@ -115,9 +121,24 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
     protected notifyWorkpaces(): void {
         let infos = Array.from(this.workspaces.values());
         infos = infos.filter(ws => !this.active || this.isActive(ws));
+
+        const hasEnoughInfos = infos.length >= this.internalLimit;
+        const hasMoreWorkspacesInDB = !(this.workspaces.size < this.dbFetchLimit);
+        if (!hasEnoughInfos && hasMoreWorkspacesInDB) {
+            this.dbFetchLimit += this.internalLimit - infos.length;
+            this.internalRefetch();
+            return;
+        }
+        infos = infos.slice(0, this.internalLimit > infos.length ? infos.length : this.internalLimit);
+
+        // We could move the searchTerm filter above the dbFetchLimit adjustment.
+        // But that has the following drawback:
+        // - If you type a non-existing search term it would result in fetching all workspaces for this user.
+        // Also, the search bar is currently conceptional more a filter of currently displayed workspaces.
         if (this.searchTerm) {
             infos = infos.filter(ws => (ws.workspace.description+ws.workspace.id+ws.workspace.contextURL+ws.workspace.context).toLowerCase().indexOf(this.searchTerm!.toLowerCase()) !== -1);
         }
+
         infos = infos.sort((a,b) => {
            return WorkspaceInfo.lastActiveISODate(b).localeCompare(WorkspaceInfo.lastActiveISODate(a));
         });
