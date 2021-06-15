@@ -9,7 +9,7 @@ import React from 'react';
 import { Terminal, ITerminalOptions, ITheme } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css';
-import { DisposableCollection, GitpodServer } from '@gitpod/gitpod-protocol';
+import { DisposableCollection, GitpodServer, HeadlessLogChunk, HeadlessLogError, HeadlessLogMessage } from '@gitpod/gitpod-protocol';
 
 export interface WorkspaceLogsProps {
   logsEmitter: EventEmitter;
@@ -93,21 +93,24 @@ export function watchHeadlessLogs(server: GitpodServer, instanceId: string, onLo
   const startWatchingLogs = async () => {
     await checkIsDone();
 
-    const retry = async () => {
+    const retry = async (reason: string) => {
+      console.debug("re-trying headless-logs because: " + reason);
       await new Promise((resolve) => {
         setTimeout(resolve, 2000);
       });
-      startWatchingLogs();
+      startWatchingLogs().catch(console.error);
     };
 
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined = undefined;
     try {
       const logSources = await server.getHeadlessLog(instanceId);
       // TODO(gpl) Only listening on first stream for now
       const streamIds = Object.keys(logSources.streams);
       if (streamIds.length < 1) {
-        await retry();
+        await retry("no streams");
         return;
       }
+
       const streamUrl = logSources.streams[streamIds[0]];
       console.log("fetching from streamUrl: " + streamUrl);
       const response = await fetch(streamUrl, {
@@ -116,31 +119,44 @@ export function watchHeadlessLogs(server: GitpodServer, instanceId: string, onLo
         credentials: 'include',
         keepalive: true
       });
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       if (!reader) {
-        await retry();
+        await retry("no reader");
         return;
       }
-      disposables.push({ dispose: () => reader.cancel() });
+      disposables.push({ dispose: () => reader?.cancel() });
 
       const decoder = new TextDecoder('utf-8');
       let chunk = await reader.read();
       while (!chunk.done) {
-        const chunkStr = decoder.decode(chunk.value, { stream: true });
-        if (chunkStr === "Request Timeout") {
-          await retry();
-          return;
+        const str = decoder.decode(chunk.value, { stream: true });
+
+        let msg: HeadlessLogMessage;
+        try {
+          msg = JSON.parse(str);
+        } catch(err) {
+          console.debug(err);
+          continue;
         }
-        onLog(chunkStr);
+        if (HeadlessLogChunk.is(msg)) {
+          onLog(msg.chunk);
+        } else if (HeadlessLogError.is(msg)) {
+          const err: HeadlessLogError = msg;
+          console.log(`error: (${err.statusCode}|${err.msg})`);
+          throw new Error(err.msg);
+        }
         chunk = await reader.read();
       }
+      reader.cancel()
 
       await checkIsDone();
     } catch(err) {
       console.debug("error while listening to headless logs", err);
+      reader?.cancel().catch(console.debug);
+      await retry("error while listening");
     }
   };
-  startWatchingLogs();
+  startWatchingLogs().catch(console.error);
 
   return disposables;
 }

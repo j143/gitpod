@@ -45,3 +45,25 @@ export interface HeadlessLogSources {
     // A map of id to URL
     streams: { [streamID: string]: string };
 }
+
+export type HeadlessLogMessage = HeadlessLogChunk | HeadlessLogError;
+export interface HeadlessLogChunk {
+    // UTF-8 encoded
+    chunk: string;
+}
+export namespace HeadlessLogChunk {
+    export function is(o: any): o is HeadlessLogChunk {
+        return !!o && `chunk` in o;
+    }
+}
+export interface HeadlessLogError {
+    msg: string;
+    statusCode: number;
+}
+export namespace HeadlessLogError {
+    export function is(o: any): o is HeadlessLogError {
+        return !!o
+            && `msg` in o
+            && `statusCode` in o;
+    }
+}

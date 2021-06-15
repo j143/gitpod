@@ -47,7 +47,7 @@ import { WorkspaceDeletionService } from './workspace-deletion-service';
 import { WorkspaceFactory } from './workspace-factory';
 import { WorkspaceStarter } from './workspace-starter';
 import { HeadlessLogSources } from "@gitpod/gitpod-protocol/lib/headless-workspace-log";
-import { Timeout, WorkspaceLogService } from "./workspace-log-service";
+import { WorkspaceLogService } from "./workspace-log-service";
 
 
 @injectable()
@@ -1184,7 +1184,7 @@ export class GitpodServerImpl<Client extends GitpodClient, Server extends Gitpod
         }
 
         const sources = await this.workspaceLogService.getWorkspaceLogURLs(wsi);
-        if (!sources || Timeout.is(sources)) {
+        if (!sources) {
             throw new ResponseError(ErrorCodes.NOT_FOUND, `Headless logs for ${instanceId} not found`);
         }
         return sources;

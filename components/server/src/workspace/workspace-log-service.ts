@@ -10,7 +10,7 @@ import { inject, injectable } from "inversify";
 import * as url from "url";
 import { Status, StatusServiceClient } from '@gitpod/supervisor-api-grpcweb/lib/status_pb_service'
 import { TasksStatusRequest, TasksStatusResponse, TaskStatus } from "@gitpod/supervisor-api-grpcweb/lib/status_pb";
-import { TerminalServiceClient } from "@gitpod/supervisor-api-grpcweb/lib/terminal_pb_service";
+import { ResponseStream, TerminalServiceClient } from "@gitpod/supervisor-api-grpcweb/lib/terminal_pb_service";
 import { ListenTerminalRequest, ListenTerminalResponse } from "@gitpod/supervisor-api-grpcweb/lib/terminal_pb";
 import { NodeHttpTransport } from '@improbable-eng/grpc-web-node-http-transport';
 import { WorkspaceInstance } from "@gitpod/gitpod-protocol";
@@ -20,20 +20,7 @@ import * as browserHeaders from "browser-headers";
 import { log } from '@gitpod/gitpod-protocol/lib/util/logging';
 import { TextDecoder } from "util";
 import { WebsocketTransport } from "../util/grpc-web-ws-transport";
-
-export interface Timeout {
-    timeout: true,
-}
-export namespace Timeout {
-    export function is(o: any): o is Timeout {
-        return !!o && `timeout` in o;
-    }
-}
-
-export type WorkspaceLogUrls =
-        HeadlessLogSources
-    |   Timeout
-    |   undefined;
+import { Deferred } from "@gitpod/gitpod-protocol/lib/util/deferred";
 
 @injectable()
 export class WorkspaceLogService {
@@ -42,13 +29,15 @@ export class WorkspaceLogService {
     @inject(WorkspaceDB) protected readonly db: WorkspaceDB;
     @inject(Env) protected readonly env: Env;
 
-    public async getWorkspaceLogURLs(wsi: WorkspaceInstance, maxTimeoutSecs: number = 30): Promise<WorkspaceLogUrls> {
-        const streamIds = await this.retryWhileInstanceIsRunning(wsi, () => this.listWorkspaceLogs(wsi), maxTimeoutSecs);
-        if (streamIds === undefined || Timeout.is(streamIds)) {
-            return streamIds;
+    public async getWorkspaceLogURLs(wsi: WorkspaceInstance, maxTimeoutSecs: number = 30): Promise<HeadlessLogSources | undefined> {
+        const aborted = new Deferred<boolean>();
+        setTimeout(() => aborted.resolve(true), maxTimeoutSecs * 1000);
+        const streamIds = await this.retryWhileInstanceIsRunning(wsi, () => this.listWorkspaceLogs(wsi), "list workspace log streams", aborted);
+        if (streamIds === undefined) {
+            return undefined;
         }
 
-        // render URLs 
+        // render URLs
         const streams: { [id: string]: string } = {};
         for (const [streamId, terminalId] of streamIds.entries()) {
             streams[streamId] = this.env.hostUrl.with({
@@ -62,7 +51,7 @@ export class WorkspaceLogService {
 
     /**
      * Returns a list of ids of streams for the given workspace
-     * @param workspace 
+     * @param workspace
      */
     protected async listWorkspaceLogs(wsi: WorkspaceInstance): Promise<Map<string, string>> {
         const tasks = await new Promise<TaskStatus[]>((resolve, reject) => {
@@ -92,11 +81,11 @@ export class WorkspaceLogService {
 
     /**
      * For now, simply stream the supervisor data
-     * 
-     * @param workspace 
-     * @param terminalID 
+     *
+     * @param workspace
+     * @param terminalID
      */
-    async streamWorkspaceLog(wsi: WorkspaceInstance, terminalID: string, sink: (chunk: string) => Promise<void>, maxTimeoutSecs: number = 30): Promise<void | Timeout | undefined> {
+    async streamWorkspaceLog(wsi: WorkspaceInstance, terminalID: string, sink: (chunk: string) => Promise<void>, aborted: Deferred<boolean>): Promise<void> {
         const client = new TerminalServiceClient(toSupervisorURL(wsi.ideUrl), {
             transport: WebsocketTransport(),    // necessary because HTTPTransport causes caching
         });
@@ -104,10 +93,12 @@ export class WorkspaceLogService {
         req.setAlias(terminalID);
 
         let receivedDataYet = false;
-        const decoder = new TextDecoder('utf-8')
+        let stream: ResponseStream<ListenTerminalResponse> | undefined = undefined;
+        aborted.promise.then(() => stream?.cancel());
         const doStream = (cancelRetry: () => void) => new Promise<void>((resolve, reject) => {
             // [gpl] this is the very reason we cannot redirect the frontend to the supervisor URL: currently we only have ownerTokens for authentication
-            const stream = client.listen(req, authHeaders(wsi));
+            const decoder = new TextDecoder('utf-8')
+            stream = client.listen(req, authHeaders(wsi));
             stream.on('data', (resp: ListenTerminalResponse) => {
                 receivedDataYet = true;
 
@@ -115,9 +106,9 @@ export class WorkspaceLogService {
                 const data: string = typeof raw === 'string' ? raw : decoder.decode(raw);
                 sink(data)
                     .catch((err) => {
-                        stream.cancel();    // If downstream reports an error: cancel connection to upstream
+                        stream?.cancel();    // If downstream reports an error: cancel connection to upstream
                         log.debug({ instanceId: wsi.id }, "stream cancelled", err);
-                    });   
+                    });
             });
             stream.on('end', (status?: Status) => {
                 if (!status || status.code === grpcStatus.OK) {
@@ -127,27 +118,25 @@ export class WorkspaceLogService {
 
                 const err = new Error(`upstream ended with status code: ${status.code}`);
                 (err as any).status = status;
-                if (!receivedDataYet && (status.code === grpcStatus.UNKNOWN || status.code === grpcStatus.UNAVAILABLE)) {
+                if (!receivedDataYet && status.code === grpcStatus.UNAVAILABLE) {
                     log.debug("stream headless workspace log", err);
                     reject(err);
                     return;
                 }
-                
+
                 cancelRetry();
                 reject(err);
             });
         });
-        return await this.retryWhileInstanceIsRunning(wsi, doStream, maxTimeoutSecs);
+        await this.retryWhileInstanceIsRunning(wsi, doStream, "stream workspace logs", aborted);
     }
 
-    protected async retryWhileInstanceIsRunning<T>(wsi: WorkspaceInstance, op: (cancel: () => void) => Promise<T>, maxTimeoutSecs: number): Promise<T | Timeout | undefined> {
+    protected async retryWhileInstanceIsRunning<T>(wsi: WorkspaceInstance, op: (cancel: () => void) => Promise<T>, description: string, aborted: Deferred<boolean>): Promise<T | undefined> {
         let cancelled = false;
         const cancel = () => { cancelled = true; };
 
-        let start = Date.now();
         let instance = wsi;
-        while (!cancelled && Date.now() < start + (maxTimeoutSecs * 1000)) {
-            // list workspace logs
+        while (!cancelled && !(aborted.isResolved && (await aborted.promise)) ) {
             try {
                 return await op(cancel);
             } catch (err) {
@@ -155,7 +144,7 @@ export class WorkspaceLogService {
                     throw err;
                 }
 
-                log.debug("unable to fetch workspace log streams", err);
+                log.debug(`unable to ${description}`, err);
                 const maybeInstance = await this.db.findInstanceById(instance.id);
                 if (!maybeInstance) {
                     return undefined;
@@ -165,14 +154,12 @@ export class WorkspaceLogService {
                 if (!this.shouldRetry(instance)) {
                     return undefined;
                 }
+                log.debug(`re-trying ${description}...`);
                 await new Promise((resolve) => setTimeout(resolve, 2000));
                 continue;
             }
         }
-        if (cancelled) {
-            return undefined;
-        }
-        return { timeout: true };
+        return undefined;
     }
 
     protected shouldRetry(wsi: WorkspaceInstance): boolean {
