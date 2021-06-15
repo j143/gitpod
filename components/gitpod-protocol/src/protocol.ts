@@ -1180,12 +1180,22 @@ export interface Terms {
 
 export interface Project {
     id: string;
+    name: string;
     cloneUrl: string;
     teamId: string;
     appInstallationId: string;
     creationTime: string;
     /** This is a flag that triggers the HARD DELETION of this entity */
     deleted?: boolean;
+}
+
+export interface ProjectInfo {
+    id: string;
+    name: string;
+    cloneUrl: string;
+    teamId: string;
+    appInstallationId: string;
+    creationTime: string;
 }
 
 export interface Team {

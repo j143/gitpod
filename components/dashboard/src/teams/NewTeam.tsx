@@ -38,7 +38,7 @@ export default function () {
                 {!!creationError && <p className="text-gitpod-red">{creationError.message}</p>}
             </div>
             <div className="flex flex-row-reverse space-x-2 space-x-reverse mt-2">
-                <button type="submit">Create Team</button>
+                <button type="submit">ro</button>
                 <button className="secondary" onClick={() => history.push('/')}>Cancel</button>
             </div>
         </form>

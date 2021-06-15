@@ -7,7 +7,7 @@
 import { injectable, inject } from "inversify";
 import { GitpodServerImpl } from "../../../src/workspace/gitpod-server-impl";
 import { TraceContext } from "@gitpod/gitpod-protocol/lib/util/tracing";
-import { GitpodServer, GitpodClient, AdminGetListRequest, User, AdminGetListResult, Permission, AdminBlockUserRequest, AdminModifyRoleOrPermissionRequest, RoleOrPermission, AdminModifyPermanentWorkspaceFeatureFlagRequest, UserFeatureSettings, AdminGetWorkspacesRequest, WorkspaceAndInstance, GetWorkspaceTimeoutResult, WorkspaceTimeoutDuration, WorkspaceTimeoutValues, SetWorkspaceTimeoutResult, WorkspaceContext, CreateWorkspaceMode, WorkspaceCreationResult, PrebuiltWorkspaceContext, CommitContext, PrebuiltWorkspace, PermissionName, WorkspaceInstance, EduEmailDomain } from "@gitpod/gitpod-protocol";
+import { GitpodServer, GitpodClient, AdminGetListRequest, User, AdminGetListResult, Permission, AdminBlockUserRequest, AdminModifyRoleOrPermissionRequest, RoleOrPermission, AdminModifyPermanentWorkspaceFeatureFlagRequest, UserFeatureSettings, AdminGetWorkspacesRequest, WorkspaceAndInstance, GetWorkspaceTimeoutResult, WorkspaceTimeoutDuration, WorkspaceTimeoutValues, SetWorkspaceTimeoutResult, WorkspaceContext, CreateWorkspaceMode, WorkspaceCreationResult, PrebuiltWorkspaceContext, CommitContext, PrebuiltWorkspace, PermissionName, WorkspaceInstance, EduEmailDomain, ProviderRepository } from "@gitpod/gitpod-protocol";
 import { ResponseError } from "vscode-jsonrpc";
 import { TakeSnapshotRequest, AdmissionLevel, ControlAdmissionRequest, StopWorkspacePolicy, DescribeWorkspaceRequest, SetTimeoutRequest } from "@gitpod/ws-manager/lib";
 import { ErrorCodes } from "@gitpod/gitpod-protocol/lib/messaging/error";
@@ -38,6 +38,10 @@ import { ChargebeeCouponComputer } from "../user/coupon-computer";
 import { ChargebeeService } from "../user/chargebee-service";
 import { Chargebee as chargebee } from '@gitpod/gitpod-payment-endpoint/lib/chargebee';
 import { EnvEE } from "../env";
+import { Octokit } from "@octokit/rest";
+import { RequestError } from "@octokit/request-error";
+
+import { GithubApp } from "../prebuilds/github-app";
 
 @injectable()
 export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodServer> {
@@ -64,6 +68,8 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     @inject(UpgradeHelper) protected readonly upgradeHelper: UpgradeHelper;
     @inject(ChargebeeCouponComputer) protected readonly couponComputer: ChargebeeCouponComputer;
     @inject(ChargebeeService) protected readonly chargebeeService: ChargebeeService;
+
+    @inject(GithubApp) protected readonly githubApp: GithubApp;
 
     @inject(EnvEE) protected readonly env: EnvEE;
 
@@ -178,7 +184,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
             if (!runningInstance) {
                 throw new ResponseError(ErrorCodes.NOT_FOUND, "Can only set keep-alive for running workspaces");
             }
-            await this.guardAccess({kind: "workspaceInstance", subject: runningInstance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false}, "update");
+            await this.guardAccess({ kind: "workspaceInstance", subject: runningInstance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false }, "update");
 
             // if any other running instance has a custom timeout other than the user's default, we'll reset that timeout
             const client = await this.workspaceManagerClientProvider.get(runningInstance.region);
@@ -230,7 +236,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
                 log.warn({ userId: user.id, workspaceId }, 'Can only get keep-alive for running workspaces');
                 return { duration: "30m", canChange };
             }
-            await this.guardAccess({kind: "workspaceInstance", subject: runningInstance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false}, "get");
+            await this.guardAccess({ kind: "workspaceInstance", subject: runningInstance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false }, "get");
 
             const req = new DescribeWorkspaceRequest();
             req.setId(runningInstance.id);
@@ -296,11 +302,11 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
 
         try {
             const workspace = await this.internalGetWorkspace(id, this.workspaceDb.trace({ span }));
-            await this.guardAccess({kind: "workspace", subject: workspace}, "update");
+            await this.guardAccess({ kind: "workspace", subject: workspace }, "update");
 
             const instance = await this.workspaceDb.trace({ span }).findRunningInstance(id);
             if (instance) {
-                await this.guardAccess({kind: "workspaceInstance", subject: instance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false}, "update");
+                await this.guardAccess({ kind: "workspaceInstance", subject: instance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false }, "update");
 
                 const req = new ControlAdmissionRequest();
                 req.setId(instance.id);
@@ -343,8 +349,8 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
                 throw new ResponseError(ErrorCodes.NOT_FOUND, `Workspace ${workspaceId} has no running instance`);
             }
 
-            await this.guardAccess({kind: "workspaceInstance", subject: instance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false}, "get");
-            await this.guardAccess({kind: "snapshot", subject: undefined, workspaceOwnerID: workspace.ownerId, workspaceID: workspace.id }, "create");
+            await this.guardAccess({ kind: "workspaceInstance", subject: instance, workspaceOwnerID: workspace.ownerId, workspaceIsShared: workspace.shareable || false }, "get");
+            await this.guardAccess({ kind: "snapshot", subject: undefined, workspaceOwnerID: workspace.ownerId, workspaceID: workspace.id }, "create");
 
             const client = await this.workspaceManagerClientProvider.get(instance.region);
             const request = new TakeSnapshotRequest();
@@ -386,7 +392,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
             }
 
             const snapshots = await this.workspaceDb.trace({ span }).findSnapshotsByWorkspaceId(workspaceId);
-            await Promise.all(snapshots.map(s => this.guardAccess({kind: "snapshot", subject: s, workspaceOwnerID: workspace.ownerId}, "get")));
+            await Promise.all(snapshots.map(s => this.guardAccess({ kind: "snapshot", subject: s, workspaceOwnerID: workspace.ownerId }, "get")));
 
             return snapshots.map(s => s.id);
         } catch (e) {
@@ -401,7 +407,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminGetUsers(req: AdminGetListRequest<User>): Promise<AdminGetListResult<User>> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminGetUsers", {req}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminGetUsers", { req }, Permission.ADMIN_USERS);
 
         const span = opentracing.globalTracer().startSpan("adminGetUsers");
         try {
@@ -419,7 +425,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminGetUser(id: string): Promise<User> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminGetUser", {id}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminGetUser", { id }, Permission.ADMIN_USERS);
 
         let result: User | undefined;
         const span = opentracing.globalTracer().startSpan("adminGetUser");
@@ -441,7 +447,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminBlockUser(req: AdminBlockUserRequest): Promise<User> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminBlockUser", {req}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminBlockUser", { req }, Permission.ADMIN_USERS);
 
         const span = opentracing.globalTracer().startSpan("adminBlockUser");
         try {
@@ -474,7 +480,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminDeleteUser(id: string): Promise<void> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminDeleteUser", {id}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminDeleteUser", { id }, Permission.ADMIN_USERS);
 
         const span = opentracing.globalTracer().startSpan("adminDeleteUser");
         try {
@@ -490,7 +496,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminModifyRoleOrPermission(req: AdminModifyRoleOrPermissionRequest): Promise<User> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminModifyRoleOrPermission", {req}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminModifyRoleOrPermission", { req }, Permission.ADMIN_USERS);
 
         const span = opentracing.globalTracer().startSpan("adminModifyRoleOrPermission");
         span.log(req);
@@ -526,7 +532,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminModifyPermanentWorkspaceFeatureFlag(req: AdminModifyPermanentWorkspaceFeatureFlagRequest): Promise<User> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminModifyPermanentWorkspaceFeatureFlag", {req}, Permission.ADMIN_USERS);
+        await this.guardAdminAccess("adminModifyPermanentWorkspaceFeatureFlag", { req }, Permission.ADMIN_USERS);
 
         const span = opentracing.globalTracer().startSpan("adminModifyPermanentWorkspaceFeatureFlag");
         span.log(req);
@@ -564,7 +570,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminGetWorkspaces(req: AdminGetWorkspacesRequest): Promise<AdminGetListResult<WorkspaceAndInstance>> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminGetWorkspaces", {req}, Permission.ADMIN_WORKSPACES);
+        await this.guardAdminAccess("adminGetWorkspaces", { req }, Permission.ADMIN_WORKSPACES);
 
         const span = opentracing.globalTracer().startSpan("adminGetWorkspaces");
         try {
@@ -580,7 +586,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminGetWorkspace(id: string): Promise<WorkspaceAndInstance> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminGetWorkspace", {id}, Permission.ADMIN_WORKSPACES);
+        await this.guardAdminAccess("adminGetWorkspace", { id }, Permission.ADMIN_WORKSPACES);
 
         let result: WorkspaceAndInstance | undefined;
         const span = opentracing.globalTracer().startSpan("adminGetWorkspace");
@@ -602,16 +608,16 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async adminForceStopWorkspace(id: string): Promise<void> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminForceStopWorkspace", {id}, Permission.ADMIN_WORKSPACES);
+        await this.guardAdminAccess("adminForceStopWorkspace", { id }, Permission.ADMIN_WORKSPACES);
 
         const span = opentracing.globalTracer().startSpan("adminForceStopWorkspace");
-        await this.internalStopWorkspace({ span }, id, undefined,  StopWorkspacePolicy.IMMEDIATELY);
+        await this.internalStopWorkspace({ span }, id, undefined, StopWorkspacePolicy.IMMEDIATELY);
     }
 
     async adminRestoreSoftDeletedWorkspace(id: string): Promise<void> {
         this.requireEELicense(Feature.FeatureAdminDashboard);
 
-        await this.guardAdminAccess("adminRestoreSoftDeletedWorkspace", {id}, Permission.ADMIN_WORKSPACES);
+        await this.guardAdminAccess("adminRestoreSoftDeletedWorkspace", { id }, Permission.ADMIN_WORKSPACES);
 
         const span = opentracing.globalTracer().startSpan("adminRestoreSoftDeletedWorkspace");
         await this.workspaceDb.trace({ span }).transaction(async db => {
@@ -633,10 +639,10 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     protected async guardAdminAccess(method: string, params: any, requiredPermission: PermissionName) {
         const user = this.checkAndBlockUser(method);
         if (!this.authorizationService.hasPermission(user, requiredPermission)) {
-            log.warn({userId: this.user?.id}, "unauthorised admin access", { authorised: false, method, params });
+            log.warn({ userId: this.user?.id }, "unauthorised admin access", { authorised: false, method, params });
             throw new ResponseError(ErrorCodes.PERMISSION_DENIED, "not allowed");
         }
-        log.info({userId: this.user?.id}, "admin access", { authorised: true, method, params });
+        log.info({ userId: this.user?.id }, "admin access", { authorised: true, method, params });
     }
 
     protected async findPrebuiltWorkspace(ctx: TraceContext, user: User, context: WorkspaceContext, mode: CreateWorkspaceMode): Promise<WorkspaceCreationResult | PrebuiltWorkspaceContext | undefined> {
@@ -746,7 +752,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     }
 
     async adminSetLicense(key: string): Promise<void> {
-        await this.guardAdminAccess("adminGetWorkspaces", {key}, Permission.ADMIN_API);
+        await this.guardAdminAccess("adminGetWorkspaces", { key }, Permission.ADMIN_API);
 
         await this.licenseDB.store(uuidv4(), key);
         await this.licenseEvaluator.reloadLicense();
@@ -1031,7 +1037,7 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
     async subscriptionCancel(subscriptionId: string): Promise<void> {
         const user = this.checkUser('subscriptionCancel');
         const chargebeeSubscriptionId = await this.doGetUserPaidSubscription(user.id, subscriptionId);
-        await this.chargebeeService.cancelSubscription(chargebeeSubscriptionId , { userId: user.id }, { subscriptionId, chargebeeSubscriptionId });
+        await this.chargebeeService.cancelSubscription(chargebeeSubscriptionId, { userId: user.id }, { subscriptionId, chargebeeSubscriptionId });
     }
 
     async subscriptionCancelDowngrade(subscriptionId: string): Promise<void> {
@@ -1421,4 +1427,119 @@ export class GitpodServerEEImpl extends GitpodServerImpl<GitpodClient, GitpodSer
         await this.subscriptionService.addCredit(user.id, 50, now);
         return 'Thank you for you feedback. We have added 50 Gitpod Hours to your account. Have fun!';
     }
+
+    //#region Projects concerns
+    //
+    async getProviderRepositoriesForUser(params: { provider: string, hints?: object }): Promise<ProviderRepository[]> {
+        const user = this.checkAndBlockUser("getProviderRepositoriesForUser");
+        const result: ProviderRepository[] = [];
+
+        if (params.provider !== "github.com") {
+            return result; // Just GitHub.com for now
+        }
+
+        const authProviderId = this.hostContextProvider.get(params.provider)?.authProvider?.authProviderId;
+        if (!authProviderId) {
+            return result;
+        }
+        const identity = user.identities.find(i => i.authProviderId === authProviderId);
+        if (!identity) {
+            return result;
+        }
+        const userName = identity.authName;
+
+        const probot = this.githubApp.server?.probotApp;
+        if (!probot) {
+            return result;
+        }
+
+        const findInstallationForAccount = async (account: string) => {
+            const api = await probot.auth();
+            try {
+                const installationInAccount = await api.apps.getUserInstallation({ username: account })
+                if (installationInAccount) {
+                    const installationId = installationInAccount.data.id;
+                    return installationId;
+                }
+            } catch (error) {
+                if (error instanceof RequestError) {
+                    // ignore 404 - not found
+                } else {
+                    log.debug(error);
+                }
+            }
+        }
+        const listReposForInstallation = async (installationId: number) => {
+            const sub = await probot.auth(installationId);
+            try {
+                const accessibleRepos = await sub.apps.listReposAccessibleToInstallation();
+                return accessibleRepos.data.repositories.map(r => {
+                    return {
+                        name: r.name,
+                        cloneUrl: r.url,
+                        account: r.owner.login,
+                        installationId,
+                    };
+                });
+            } catch (error) {
+                if (error instanceof RequestError) {
+                    // ignore 404 - not found
+                } else {
+                    log.debug(error);
+                }
+            }
+        }
+
+        const listReposAccessibleToInstallation = async (account: string) => {
+            const installationId = await findInstallationForAccount(account);
+            if (installationId) {
+                return await listReposForInstallation(installationId);
+            }
+        }
+
+        const ownRepos = await listReposAccessibleToInstallation(userName);
+        if (ownRepos) {
+            result.push(...ownRepos);
+        }
+
+        const organizations: string[] = [];
+        try {
+            const token = await this.tokenProvider.getTokenForHost(user, params.provider);
+            if (token.scopes.includes("read:org")) {
+                const api = new Octokit({
+                    auth: token.value
+                });
+                const { data } = await api.orgs.listMembershipsForAuthenticatedUser();
+                organizations.push(...data.map(o => o.organization.login));
+            }
+        } catch { }
+
+        for (const org of organizations) {
+            const orgRepos = await listReposAccessibleToInstallation(org);
+            if (orgRepos) {
+                result.push(...orgRepos);
+            }
+        }
+
+        // If hints contain an additional installationId, let's try to add the repos
+        //
+        const installationId = (params.hints as any)?.installationId;
+        if (installationId) {
+            if (!result.some(r => r.installationId === installationId)) {
+                const additional = await listReposForInstallation(installationId);
+                if (additional) {
+                    for (const repo of additional) {
+                        if (result.some(r => r.account === repo.account && r.name === repo.name)) {
+                            continue; // avoid duplicates when switching between "selected repos" and "all repos"
+                        }
+                        result.push(repo);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+    //
+    //#endregion
 }

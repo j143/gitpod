@@ -9,7 +9,7 @@ import {
     WhitelistedRepository, WorkspaceImageBuild, AuthProviderInfo, Branding, CreateWorkspaceMode,
     Token, UserEnvVarValue, ResolvePluginsParams, PreparePluginUploadParams, Terms,
     ResolvedPlugins, Configuration, InstallPluginsParams, UninstallPluginParams, UserInfo, GitpodTokenType,
-    GitpodToken, AuthProviderEntry, GuessGitTokenScopesParams, GuessedGitTokenScopes, Team, TeamMemberInfo
+    GitpodToken, AuthProviderEntry, GuessGitTokenScopesParams, GuessedGitTokenScopes, Team, TeamMemberInfo, Project, ProjectInfo
 } from './protocol';
 import { JsonRpcProxy, JsonRpcServer } from './messaging/proxy-factory';
 import { Disposable, CancellationTokenSource } from 'vscode-jsonrpc';
@@ -198,6 +198,31 @@ export interface GitpodServer extends JsonRpcServer<GitpodClient>, AdminServer, 
 
     getGithubUpgradeUrls(): Promise<GithubUpgradeURL[]>;
 
+    /**
+     * projects
+     */
+    getProviderRepositoriesForUser(params: GetProviderRepositoriesParams): Promise<ProviderRepository[]>;
+    createProject(params: CreateProjectParams): Promise<Project>;
+    getProjects(teamId: string): Promise<ProjectInfo[]>;
+}
+
+export interface CreateProjectParams {
+    name: string;
+    account: string;
+    provider: string;
+    cloneUrl: string;
+    teamId: string;
+    appInstallationId: string;
+}
+export interface GetProviderRepositoriesParams {
+    provider: string;
+    hints?: { installationId: string } | object;
+}
+export interface ProviderRepository {
+    name: string;
+    account: string;
+    cloneUrl: string;
+    installationId: number;
 }
 
 export const WorkspaceTimeoutValues = ["30m", "60m", "180m"] as const;
@@ -210,6 +235,7 @@ export const createServerMock = function <C extends GitpodClient, S extends Gitp
     methods.setClient = methods.setClient || (() => { });
     methods.dispose = methods.dispose || (() => { });
     return new Proxy<JsonRpcProxy<S>>(methods as any as JsonRpcProxy<S>, {
+        // @ts-ignore
         get: (target: S, property: keyof S) => {
             const result = target[property];
             if (!result) {

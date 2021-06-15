@@ -30,6 +30,7 @@ const StartWorkspace = React.lazy(() => import(/* webpackPrefetch: true */ './st
 const CreateWorkspace = React.lazy(() => import(/* webpackPrefetch: true */ './start/CreateWorkspace'));
 const NewTeam = React.lazy(() => import(/* webpackPrefetch: true */ './teams/NewTeam'));
 const Members = React.lazy(() => import(/* webpackPrefetch: true */ './teams/Members'));
+const NewProject = React.lazy(() => import(/* webpackPrefetch: true */ './projects/NewProject'));
 const Projects = React.lazy(() => import(/* webpackPrefetch: true */ './projects/Projects'));
 const InstallGitHubApp = React.lazy(() => import(/* webpackPrefetch: true */ './prebuilds/InstallGitHubApp'));
 const FromReferrer = React.lazy(() => import(/* webpackPrefetch: true */ './FromReferrer'));
@@ -147,6 +148,7 @@ function App() {
         <div className="container">
             <Menu />
             <Switch>
+                <Route path="/new" exact component={NewProject} />
                 <Route path="/setup" exact component={Setup} />
                 <Route path="/workspaces" exact component={Workspaces} />
                 <Route path="/account" exact component={Account} />
