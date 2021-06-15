@@ -129,22 +129,24 @@ export function watchHeadlessLogs(server: GitpodServer, instanceId: string, onLo
       const decoder = new TextDecoder('utf-8');
       let chunk = await reader.read();
       while (!chunk.done) {
-        const str = decoder.decode(chunk.value, { stream: true });
-
         let msg: HeadlessLogMessage;
         try {
+          const str = decoder.decode(chunk.value, { stream: true });
+          console.debug("chunk: " + chunk.value);
           msg = JSON.parse(str);
         } catch(err) {
           console.debug(err);
           continue;
         }
-        if (HeadlessLogChunk.is(msg)) {
-          onLog(msg.chunk);
-        } else if (HeadlessLogError.is(msg)) {
+
+        if (HeadlessLogError.is(msg)) {
           const err: HeadlessLogError = msg;
           console.log(`error: (${err.statusCode}|${err.msg})`);
           throw new Error(err.msg);
+        } else if (HeadlessLogChunk.is(msg)) {
+          onLog(msg.chunk);
         }
+
         chunk = await reader.read();
       }
       reader.cancel()
