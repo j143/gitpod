@@ -88,21 +88,23 @@ export class HeadlessLogController {
                     log.debug(logCtx, "headless-log: aborted");
                 };
                 req.on('abort', abort);
-                const queue = new Queue();  // Catches backpressure from the client connection
-                const writeToResponse = async (chunk: string) => {
-                    await queue.enqueue(() => new Promise<void>((resolve, reject) => {
-                        const msg: HeadlessLogMessage = {
-                            chunk,
-                        };
-                        res.write(JSON.stringify(msg), "utf-8", (err?: Error | null) => {
-                            if (err) {
-                                reject(err);    // propagate write error to upstream
-                            } else {
-                                resolve();  // using a promise here to make backpressure work
-                            }
-                        });
-                    }));
-                };
+                const queue = new Queue();  // Buffers backpressure from the client connection
+                const writeToResponse = async (chunk: string) => queue.enqueue(() => new Promise<void>(async (resolve, reject) => {
+                    if (aborted.isResolved && (await aborted.promise)) {
+                        return;
+                    }
+                    const msg: HeadlessLogMessage = { chunk };
+                    const done = res.write(JSON.stringify(msg), "utf-8", (err?: Error | null) => {
+                        if (err) {
+                            reject(err);    // propagate write error to upstream
+                        }
+                    });
+                    if (!done) {
+                        res.once('drain', resolve);
+                    } else {
+                        resolve();
+                    }
+                }));
                 await this.workspaceLogService.streamWorkspaceLog(instance, params.terminalId, writeToResponse, aborted);
                 res.end();
             } catch (err) {
