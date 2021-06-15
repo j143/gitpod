@@ -11,7 +11,7 @@ import { EncryptionService } from "@gitpod/gitpod-protocol/lib/encryption/encryp
 export namespace Transformer {
     export const MAP_EMPTY_STR_TO_UNDEFINED: ValueTransformer = {
         to(value: any): any {
-            if (value === undefined) {
+            if (value === undefined || value === null) {
                 return '';
             }
             return value;
