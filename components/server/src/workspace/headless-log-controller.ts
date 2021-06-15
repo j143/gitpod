@@ -6,7 +6,7 @@
 
 import { inject, injectable } from "inversify";
 import * as express from 'express';
-import { HeadlessLogMessage, User } from "@gitpod/gitpod-protocol";
+import { HeadlessLogMessage, Queue, User } from "@gitpod/gitpod-protocol";
 import { log } from '@gitpod/gitpod-protocol/lib/util/logging';
 import { CompositeResourceAccessGuard, OwnerResourceGuard, WorkspaceLogAccessGuard } from "../auth/resource-access";
 import { HostContextProvider } from "../auth/host-context-provider";
@@ -88,18 +88,21 @@ export class HeadlessLogController {
                     log.debug(logCtx, "headless-log: aborted");
                 };
                 req.on('abort', abort);
-                const writeToResponse = async (chunk: string) => new Promise<void>((resolve, reject) => {
-                    const msg: HeadlessLogMessage = {
-                        chunk,
-                    };
-                    res.write(JSON.stringify(msg), "utf-8", (err?: Error | null) => {
-                        if (err) {
-                            reject(err);    // propagate write error to upstream
-                        } else {
-                            resolve();  // using a promise here to make backpressure work
-                        }
-                    });
-                });
+                const queue = new Queue();  // Catches backpressure from the client connection
+                const writeToResponse = async (chunk: string) => {
+                    await queue.enqueue(() => new Promise<void>((resolve, reject) => {
+                        const msg: HeadlessLogMessage = {
+                            chunk,
+                        };
+                        res.write(JSON.stringify(msg), "utf-8", (err?: Error | null) => {
+                            if (err) {
+                                reject(err);    // propagate write error to upstream
+                            } else {
+                                resolve();  // using a promise here to make backpressure work
+                            }
+                        });
+                    }));
+                };
                 await this.workspaceLogService.streamWorkspaceLog(instance, params.terminalId, writeToResponse, aborted);
                 res.end();
             } catch (err) {
