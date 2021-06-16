@@ -86,8 +86,8 @@ export default class Workspaces extends React.Component<WorkspacesProps, Workspa
                 </div>
                 <div className="py-3 pl-3">
                     <DropDown prefix="Limit: " contextMenuWidth="w-32" activeEntry={wsModel ? wsModel?.limit+'' : undefined} entries={[{
-                        title: '50',
-                        onClick: () => { if (wsModel) wsModel.limit = 50; }
+                        title: '3',
+                        onClick: () => { if (wsModel) wsModel.limit = 3; }
                     }, {
                         title: '100',
                         onClick: () => { if (wsModel) wsModel.limit = 100; }
