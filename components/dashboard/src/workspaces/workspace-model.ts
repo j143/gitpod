@@ -34,7 +34,13 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
             limit: this.internalLimit
         }).then( infos => {
             this.updateMap(infos);
-            this.notifyWorkpaces();
+            getGitpodService().server.getWorkspaces({
+                limit: this.internalLimit,
+                pinnedOnly: true,
+            }).then(infos => {
+                this.updateMap(infos);
+                this.notifyWorkpaces();
+            });
         });
         this.disposables.push(getGitpodService().registerClient(this));
     }
@@ -126,7 +132,7 @@ export class WorkspaceModel implements Disposable, Partial<GitpodClient> {
 
     protected isActive(info: WorkspaceInfo): boolean {
         return info.workspace.pinned ||
-            (!!info.latestInstance && !['stopping', 'stopped'].includes(info.latestInstance.status?.phase));
+            (!!info.latestInstance && info.latestInstance.status?.phase !== 'stopped');
     }
 
     public getAllFetchedWorkspaces(): Map<string, WorkspaceInfo> {
